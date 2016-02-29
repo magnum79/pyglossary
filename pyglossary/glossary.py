@@ -98,6 +98,7 @@ class Glossary:
     readFormats = []
     writeFormats = []
     readFunctions = {}
+    readerClasses = {}
     writeFunctions = {}
     formatsDesc = {}
     formatsExt = {}
@@ -163,6 +164,27 @@ class Glossary:
             cls.readExt.append(extentions)
             cls.readDesc.append(desc)
             cls.formatsReadOptions[format] = getattr(plugin, 'readOptions', [])
+            try:
+                Reader = plugin.Reader
+            except AttributeError:
+                pass
+            else:
+                for attr in (
+                    '__init__',
+                    'open',
+                    'close',
+                    '__len__',
+                    '__iter__',
+                    'next',
+                ):
+                    if not hasattr(Reader, attr):
+                        log.error('invalid Reader class in "%s" plugin, no "%s" method'%(
+                            format,
+                            attr,
+                        ))
+                        break
+                else:
+                    cls.readerClasses[format] = Reader
 
         if hasattr(plugin, 'write'):
             cls.writeFunctions[format] = plugin.write
@@ -191,6 +213,7 @@ class Glossary:
         self.setInfos(info, True)
 
         self._data = []
+        self._readers = []
         '''
         self._data is a list of tuples with length 2 or 3:
             (word, definition)
@@ -246,15 +269,25 @@ class Glossary:
             returns the next entry
         """
         try:
-            rawEntry = self._data[self._entryIndex]
+            reader = self._readers[0]
         except IndexError:
-            raise StopIteration
+            try:
+                rawEntry = self._data[self._entryIndex]
+            except IndexError:
+                raise StopIteration
 
-        entry = Entry.fromRaw(
-            rawEntry,
-            defaultDefiFormat=self._defaultDefiFormat
-        )
-        self._entryIndex += 1
+            entry = Entry.fromRaw(
+                rawEntry,
+                defaultDefiFormat=self._defaultDefiFormat
+            )
+            self._entryIndex += 1
+        else:
+            try:
+                entry = reader.next()
+            except StopIteration:
+                reader.close()
+                self._readers.pop(0)
+                return
         
         for entryFilter in self.entryFilters:
             entry = entryFilter.run(entry)
@@ -302,7 +335,9 @@ class Glossary:
                 continue
             yield entry
 
-    __len__ = lambda self: len(self._data)
+    __len__ = lambda self: len(self._data) + sum(
+        len(reader) for reader in self._readers
+    )
 
     def copy(self):
         newGlos = Glossary(
@@ -380,7 +415,7 @@ class Glossary:
             return [(key, self.getInfo(key)) for key in keys]
         return list(self.info)
 
-    def read(self, filename, format='', **options):
+    def read(self, filename, format='', direct=False, **options):
         self.updateEntryFilters()
         delFile=False
         ext = splitext(filename)[1]
@@ -441,19 +476,53 @@ class Glossary:
             if not key in validOptionKeys:
                 log.error('Invalid read option "%s" given for %s format'%(key, format))
                 del options[key]
-        self.readFunctions[format].__call__(self, filename, **options)
 
-        (filenameNoExt, ext) = splitext(filename)
-        if ext.lower() in self.formatsExt[format]:
-            filename = filenameNoExt
-        self.filename = filename
+        filenameNoExt, ext = splitext(filename)
+        if not ext.lower() in self.formatsExt[format]:
+            filenameNoExt = filename
+
+        self.filename = filenameNoExt
         if self.getInfo('name') == '':
             self.setInfo('name', split(filename)[1])
+        
+        try:
+            Reader = self.readerClasses[format]
+        except KeyError:
+            if direct:
+                log.warn('no `Reader` class found in %s plugin, falling back to indirect mode'%format)
+            result = self.readFunctions[format].__call__(
+                self,
+                filename,
+                **options
+            )
+            #if not result:## FIXME
+            #    return False
+            if delFile:
+                os.remove(filename)
+        else:
+            reader = Reader(self)
+            reader.open(filename)
+            if direct:
+                log.info(
+                    'using Reader class from %s plugin for direct conversion without loading into memory'%format
+                )
+                self._readers.append(reader)
+            else:
+                self.readFromReader(reader)
 
-        if delFile:
-            os.remove(filename)
         return True
 
+    def readFromReader(self, reader):
+        """
+            iterates over `reader` object and loads the whole data into self._data
+            must call `reader.open(filename)` before calling this function
+        """
+        for entry in reader:
+            if not entry:
+                continue
+            self.addEntryObj(entry)
+        reader.close()
+        return True
 
     def write(self, filename='', format='', **options):
         if not filename:
