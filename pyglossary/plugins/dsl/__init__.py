@@ -111,7 +111,7 @@ re_m = re.compile(r'\[m(\d)\](.*?)\[/m\]')
 # single instance of parser.  it's save as long as this script's not going multithread.
 _parse = flawless_dsl.FlawlessDSLParser().parse
 
-def _clean_tags(line, audio):
+def _clean_tags(line, audio, article_tree):
     r"""
     WARNING! shortcuts may apply:
         [m2][*][ex]{}[/ex][/*][/m] => <div class="sec ex" style="margin-left:2em;color:steelblue">{}</div>
@@ -169,9 +169,12 @@ def _clean_tags(line, audio):
     line = line.replace('[t]', '''<!-- T --><span style="font-family:'Helvetica'">''')
     line = line.replace('[/t]', '</span><!-- T -->')
 
-    line = _parse(line)
+    # replace ~ with headword
+    line = re.sub(r'~', article_tree['text'], line)
 
-    # paragraph, part one: before shortcuts.
+    line = _parse(line, article_tree)
+
+        # paragraph, part one: before shortcuts.
     line = line.replace('[m]', '[m1]')
     # if line somewhere contains '[m_]' tag like
     # "[b]I[/b][m1] [c][i]conj.[/i][/c][/m][m1]1) ...[/m]"
@@ -238,10 +241,10 @@ wrapped_in_quotes_re = re.compile(r'^(\'|")(.*)(\1)$')
 def unwrap_quotes(s):
     return wrapped_in_quotes_re.sub(r'\2', s)
 
-def read(glos, fname, **options):
-    encoding = options.get('encoding', 'utf-8')
-    audio = (options.get('audio', 'no') == 'yes')
-    onlyFixMarkUp = (options.get('onlyFixMarkUp', 'no') == 'yes')
+def read(glos, fname, encoding='utf-8', audio='no', onlyFixMarkUp='no', **options):
+    encoding = encoding
+    audio = (audio == 'yes')
+    onlyFixMarkUp = (onlyFixMarkUp == 'yes')
     if onlyFixMarkUp:
         def clean_tags(line, audio):
             return _parse(line)
@@ -256,6 +259,8 @@ def read(glos, fname, **options):
     current_text = []
     line_type = 'header'
     unfinished_line = ''
+
+    article_tree = {}
 
     fp = codecs.open(fname, 'r', encoding)
     for line in fp:
@@ -287,7 +292,8 @@ def read(glos, fname, **options):
             unfinished_line = ''
 
             # convert DSL tags to HTML tags
-            line = clean_tags(line, audio)
+            # build article tree
+            line = clean_tags(line, audio, article_tree)
             current_text.append(line)
         # title word(s)
         else:
@@ -307,9 +313,13 @@ def read(glos, fname, **options):
                     )
                 # start new entry
                 current_key = line
-                current_key_alters = []
                 current_text = []
                 unfinished_line = ''
+
+                # start article tree
+                article_tree['text'] = line
+                article_tree['def'] = []
+
             line_type = 'title'
     fp.close()
     

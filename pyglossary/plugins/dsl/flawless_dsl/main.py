@@ -113,7 +113,7 @@ class FlawlessDSLParser(object):
         self.tags = frozenset(tags_)
 
 
-    def parse(self, line):
+    def parse(self, line, article_tree):
         r"""
         parse dsl markup in `line` and return clean valid dsl markup.
 
@@ -123,13 +123,13 @@ class FlawlessDSLParser(object):
         :rtype: str
         """
         line = self.put_brackets_away(line)
-        line = self._parse(line)
+        line = self._parse(line, article_tree)
         return self.bring_brackets_back(line)
 
 
-    def _parse(self, line):
+    def _parse(self, line, article_tree):
         items = self._split_line_by_tags(line)
-        line = self._tags_and_text_loop(items)
+        line = self._tags_and_text_loop(items, article_tree)
         return line
 
 
@@ -175,7 +175,7 @@ class FlawlessDSLParser(object):
 
 
     @staticmethod
-    def _tags_and_text_loop(tags_and_text):
+    def _tags_and_text_loop(tags_and_text, article_tree):
         """
         parse chunks one by one.
 
@@ -185,6 +185,8 @@ class FlawlessDSLParser(object):
         state = TEXT
         stack = []
         closings = set()
+
+        start_def = True
 
         for item_t, item in tags_and_text:
 
@@ -229,6 +231,40 @@ class FlawlessDSLParser(object):
                 if not stack:
                     _layer.Layer(stack)
                 stack[-1].text += item
+
+                #assuming first line contains transcription, word category, and sometimes word forms and comments (area)
+                start_transcription = len(re.findall(r'\\'+BRACKET_L, item)) and \
+                        len(re.findall(r'\\'+BRACKET_R, item))
+                #check if first line starts with ordered dotted list like '1.'
+                start_homonym = len(re.findall(r'\d+\.', item))
+                #translation starts
+                start_trn = len(stack[-1].tags.intersection(set([_layer.tag.Tag('m2', 'm')]))) and \
+                    not start_def
+                start_ex = stack[-1].tags.issuperset(set([_layer.tag.Tag('*' ,'*'),_layer.tag.Tag('ex' ,'ex')]))
+
+                if start_def:
+                    article_tree['def'].append({})
+                    start_def = False
+                cur_mean = len(article_tree['def'])-1
+                if start_trn:
+                    article_tree['def'][cur_mean]['tr'] = list()
+                    start_trn = False
+
+                if start_homonym:
+                    article_tree['def'][cur_mean]['mean'] = re.sub(r'(\d+)\.', r'\1', item)
+                if start_transcription:
+                    article_tree['def'][cur_mean]['ts'] = item.strip(' \\'+BRACKET_L+BRACKET_R)
+
+                if item.strip() != '':
+                    if not article_tree['def'][cur_mean].has_key('cat') \
+                            and stack[-1].tags.issuperset(_layer.i_and_c):
+                        #word category
+                        article_tree['def'][cur_mean]['cat'] = item
+                    elif not article_tree['def'][cur_mean].has_key('area') \
+                            and stack[-1].tags.issuperset(set([_layer.p_tag])):
+                        article_tree['def'][cur_mean]['area'] = item
+
+
                 state = TEXT
                 continue
 
