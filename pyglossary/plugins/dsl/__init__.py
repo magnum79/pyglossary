@@ -20,6 +20,7 @@
 
 import codecs
 import re
+import json
 from xml.sax.saxutils import escape, quoteattr
 
 from formats_common import *
@@ -307,25 +308,29 @@ def read(glos, fname, encoding='utf-8', audio='no', onlyFixMarkUp='no', **option
                     if unfinished_line:
                         # line may be skipped if ill formated
                         current_text.append(clean_tags(unfinished_line, audio))
-                    glos.addEntry(
-                        [current_key] + current_key_alters,
-                        '\n'.join(current_text),
-                    )
+                    glos_add_entry(glos, current_key, current_key_alters, current_text, article_tree)
                 # start new entry
                 current_key = line
                 current_text = []
                 unfinished_line = ''
 
+                article_tree = {}
+
                 # start article tree
                 article_tree['text'] = line
-                article_tree['def'] = []
+                # article_tree['def'] = []
 
             line_type = 'title'
     fp.close()
     
     # last entry
     if line_type == 'text':
-        glos.addEntry(
-            [current_key] + current_key_alters,
-            '\n'.join(current_text),
-        )
+        glos_add_entry(glos, current_key, current_key_alters, current_text, article_tree)
+
+
+def glos_add_entry(glos, current_key, current_key_alters, current_text, article_tree):
+    glos.addEntry(
+        [current_key] + current_key_alters,
+        # '\n'.join(current_text),
+        json.dumps(article_tree, separators=(',', ':'), ensure_ascii=False)
+    )

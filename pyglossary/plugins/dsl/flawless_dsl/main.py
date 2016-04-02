@@ -69,6 +69,17 @@ TEXT = 3
 BRACKET_L = '\0\1'
 BRACKET_R = '\0\2'
 
+START_HOMONYM = 0x1
+FIRST_HOMONYM = 0x2
+START_CLASS = 0x4
+FIRST_CLASS = 0x8
+START_TRANSCRIPTION = 0x10
+START_TRANSLATION = 0x20
+CONTINUE_TRANSLATION = 0x40
+APPEND_TRANSLATION = 0x80
+START_EXAMPLE = 0x100
+APPEND_EXAMPLE = 0x200
+
 # precompiled regexs
 re_m_tag_with_content = re.compile(r'(\[m\d\])(.*?)(\[/m\])')
 re_non_escaped_bracket = re.compile(r'(?<!\\)\[')
@@ -186,7 +197,20 @@ class FlawlessDSLParser(object):
         stack = []
         closings = set()
 
-        start_def = True
+        #dsl margin
+        margin = 0
+
+        cur_homonym = article_tree
+
+        if 'hom' in article_tree:
+            cur_homonym = article_tree['hom'][-1]
+            margin = 2
+        elif 'def' in article_tree:
+            if 'numB' in article_tree['def'][-1]:
+                #more than one word class
+                margin = 1
+
+        line_state = 0
 
         for item_t, item in tags_and_text:
 
@@ -232,38 +256,150 @@ class FlawlessDSLParser(object):
                     _layer.Layer(stack)
                 stack[-1].text += item
 
+                # example starts
+                if stack[0].tags.issuperset(set([_layer.tag.Tag('*' ,'*'),_layer.tag.Tag('ex' ,'ex')])):
+                    line_state |= START_EXAMPLE
+                    if len(stack) > 1:
+                        line_state |= APPEND_EXAMPLE
+
+                # translation starts
+                elif len(stack[0].tags.intersection(set([_layer.tag.Tag('m'+str(margin+1), 'm')]))) or \
+                        len(stack[-1].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')]))) or \
+                        (not len(stack[-1].tags.difference(set([_layer.tag.Tag('i', 'i')]))) and \
+                         len(stack[-1].tags) and \
+                         not len(stack[0].tags) and \
+                         len(stack[-2].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')])))):
+                    line_state |= START_TRANSLATION
+                    # special case - [m#] tag is on the same line with transcription
+                    if (not len(stack[-1].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')]))) and \
+                                    len(stack) > 1):
+                        line_state |= APPEND_TRANSLATION
+                # text is italic
+                #elif not len(stack[-1].tags.difference(set([_layer.tag.Tag('i', 'i')]))) and \
+                #        len(stack[-1].tags):
+                #    line_state |= APPEND_TRANSLATION
+                # text is bold
+                elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('b', 'b')]))) == 1:
+                    # line starts with bold roman number like 'IV'
+                    if len(re.findall(r'^[IV]+', item)):
+                        line_state |= START_HOMONYM
+                        if item == 'I':
+                            line_state |= FIRST_HOMONYM
+                            #margin += 1
+                    # line starts with arabic number like '1.'
+                    elif len(re.findall(r'^\d+\.', item)):
+                        line_state |= START_CLASS
+                        if item == '1.':
+                            line_state |= FIRST_CLASS
+                            margin += 1
                 #assuming first line contains transcription, word category, and sometimes word forms and comments (area)
-                start_transcription = len(re.findall(r'\\'+BRACKET_L, item)) and \
-                        len(re.findall(r'\\'+BRACKET_R, item))
-                #check if first line starts with ordered dotted list like '1.'
-                start_homonym = len(re.findall(r'\d+\.', item))
-                #translation starts
-                start_trn = len(stack[-1].tags.intersection(set([_layer.tag.Tag('m2', 'm')]))) and \
-                    not start_def
-                start_ex = stack[-1].tags.issuperset(set([_layer.tag.Tag('*' ,'*'),_layer.tag.Tag('ex' ,'ex')]))
+                elif len(re.findall(r'\\' + BRACKET_L, item)) and \
+                        len(re.findall(r'\\' + BRACKET_R, item)):
+                    line_state |= START_TRANSCRIPTION
 
-                if start_def:
-                    article_tree['def'].append({})
-                    start_def = False
-                cur_mean = len(article_tree['def'])-1
-                if start_trn:
-                    article_tree['def'][cur_mean]['tr'] = list()
-                    start_trn = False
+                if line_state & FIRST_HOMONYM:
+                    line_state ^= FIRST_HOMONYM
+                    article_tree['hom'] = []
 
-                if start_homonym:
-                    article_tree['def'][cur_mean]['mean'] = re.sub(r'(\d+)\.', r'\1', item)
-                if start_transcription:
-                    article_tree['def'][cur_mean]['ts'] = item.strip(' \\'+BRACKET_L+BRACKET_R)
+                if line_state & START_HOMONYM:
+                    line_state ^= START_HOMONYM
+                    article_tree['hom'].append({})
+                    cur_homonym = article_tree['hom'][-1]
+                    cur_homonym['numRB'] = re.sub(r'^([IV]+)', r'\1', item)
+                    cur_homonym['def'] = [{}]
 
-                if item.strip() != '':
-                    if not article_tree['def'][cur_mean].has_key('cat') \
+                if line_state & FIRST_CLASS:
+                    line_state ^= FIRST_CLASS
+                    cur_homonym['def'] = []
+
+                if line_state & START_CLASS:
+                    line_state ^= START_CLASS
+                    #if 'hom' not in article_tree:
+                    cur_homonym['def'].append({})
+                    cur_homonym['def'][-1]['numB'] = re.sub(r'(\d+)\.', r'\1', item)
+
+                if line_state & START_TRANSLATION and not line_state & CONTINUE_TRANSLATION:
+                    line_state ^= START_TRANSLATION
+                    line_state |= CONTINUE_TRANSLATION
+                    if 'trn' not in cur_homonym['def'][-1]:
+                        cur_homonym['def'][-1]['trn'] = list()
+                    cur_homonym['def'][-1]['trn'].append({})
+                    cur_homonym['def'][-1]['trn'][-1]['tr'] = list()
+
+                if line_state & APPEND_TRANSLATION:
+                    item_tagged = item
+                    if item.strip() != '':
+                        if len(stack[-1].tags.intersection(set([_layer.tag.Tag('p', 'p')]))):
+                            item_tagged = '<i data-abbr>' + item + '</i>'
+                        elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))):
+                            item_tagged = '<i>' + item + '</i>'
+                    append_leaf = cur_homonym['def'][-1]['trn'][-1]['tr'][-1]
+                    if 'syn' in append_leaf:
+                        append_leaf['syn'][-1]['text'] += item_tagged
+                    else:
+                        append_leaf['text'] += item_tagged
+                elif line_state & CONTINUE_TRANSLATION:
+                    greek = re.findall(r'^(\d+)\. ', item)
+                    if len(greek):
+                        cur_homonym['def'][-1]['trn'][-1]['num'] = greek[0]
+                        item = re.sub(r'^\d+. ', '', item)
+
+                    for variant in re.split(r'; ', item):
+                        synonims = re.split(r', ', variant)
+                        cur_homonym['def'][-1]['trn'][-1]['tr'].append({})
+                        cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['text'] = synonims[0]
+                        if len(synonims) > 1:
+                            del synonims[0]
+                            cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['syn'] = list()
+                            for synonim in synonims:
+                                cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['syn'].append({})
+                                cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['syn'][-1]['text'] = synonim
+
+                if line_state & START_TRANSCRIPTION:
+                    line_state ^= START_TRANSCRIPTION
+                    if 'def' not in cur_homonym:
+                        #if line starts with transcription, not with bold greek number
+                        cur_homonym['def'] = [{}]
+                    cur_homonym['def'][-1]['ts'] = item.strip(' \\'+BRACKET_L+BRACKET_R)
+
+                if line_state & START_EXAMPLE:
+                    if 'ex' not in cur_homonym['def'][-1]['trn'][-1]:
+                        cur_homonym['def'][-1]['trn'][-1]['ex'] = list()
+                    if not line_state & APPEND_EXAMPLE:
+                        cur_homonym['def'][-1]['trn'][-1]['ex'].append({})
+                    if len(re.findall(r' - ', item)):
+                        text, tr = re.split(r' - ', item)
+                        if not line_state & APPEND_EXAMPLE:
+                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] = text
+                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['tr'] = tr
+                        else:
+                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] += text
+                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['tr'] = tr
+                    else:
+                        item_tagged = item
+                        if item.strip() != '':
+                            if len(stack[-1].tags.intersection(set([_layer.tag.Tag('p', 'p')]))):
+                                item_tagged = '<i data-abbr>' + item + '</i>'
+                            elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))):
+                                item_tagged = '<i>' + item + '</i>'
+                        if not len(cur_homonym['def'][-1]['trn'][-1]['ex']):
+                            cur_homonym['def'][-1]['trn'][-1]['ex'].append({})
+                        if 'text' not in cur_homonym['def'][-1]['trn'][-1]['ex'][-1]:
+                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] = item_tagged
+                        elif 'tr' not in cur_homonym['def'][-1]['trn'][-1]['ex'][-1]:
+                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] += item_tagged
+                        else:
+                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['tr'] += item_tagged
+
+                elif item.strip() != '':
+                    if 'class' not in cur_homonym['def'][-1] \
                             and stack[-1].tags.issuperset(_layer.i_and_c):
-                        #word category
-                        article_tree['def'][cur_mean]['cat'] = item
-                    elif not article_tree['def'][cur_mean].has_key('area') \
+                        # word category
+                        cur_homonym['def'][-1]['class'] = item
+                    elif 'area' not in cur_homonym['def'][-1] \
                             and stack[-1].tags.issuperset(set([_layer.p_tag])):
-                        article_tree['def'][cur_mean]['area'] = item
-
+                        # word area
+                        cur_homonym['def'][-1]['area'] = item
 
                 state = TEXT
                 continue
