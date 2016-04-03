@@ -79,6 +79,7 @@ CONTINUE_TRANSLATION = 0x40
 APPEND_TRANSLATION = 0x80
 START_EXAMPLE = 0x100
 APPEND_EXAMPLE = 0x200
+APPEND_COMMENT = 0x400
 
 # precompiled regexs
 re_m_tag_with_content = re.compile(r'(\[m\d\])(.*?)(\[/m\])')
@@ -193,6 +194,19 @@ class FlawlessDSLParser(object):
         :param tags_and_text: Iterable[['OPEN', Tag] | ['CLOSE', str] | ['TEXT', str]]
         :return: str
         """
+
+        def wrap_tags(stack, item):
+            #todo check for child tags wrapping, maybe use original algorithm (to_close set)
+            item_tagged = item
+            if item.strip() != '':
+                if len(stack[-1].tags.intersection(set([_layer.tag.Tag('p', 'p')]))):
+                    item_tagged = '<i data-abbr>' + item + '</i>'
+                elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))):
+                    item_tagged = '<i>' + item + '</i>'
+                elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('sup', 'sup')]))):
+                    item_tagged = '<sup>' + item + '</sup>'
+            return item_tagged
+
         state = TEXT
         stack = []
         closings = set()
@@ -273,10 +287,6 @@ class FlawlessDSLParser(object):
                     if (not len(stack[-1].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')]))) and \
                                     len(stack) > 1):
                         line_state |= APPEND_TRANSLATION
-                # text is italic
-                #elif not len(stack[-1].tags.difference(set([_layer.tag.Tag('i', 'i')]))) and \
-                #        len(stack[-1].tags):
-                #    line_state |= APPEND_TRANSLATION
                 # text is bold
                 elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('b', 'b')]))) == 1:
                     # line starts with bold roman number like 'IV'
@@ -326,19 +336,13 @@ class FlawlessDSLParser(object):
                     cur_homonym['def'][-1]['trn'][-1]['tr'] = list()
 
                 if line_state & APPEND_TRANSLATION:
-                    item_tagged = item
                     #todo check where translation comments should belong - to num or to text - abandon I 2. 4.
                     #todo check if ♢ idioms can be extracted from samples to their own hierarchy level - abandon I 2. 5.
-                    if item.strip() != '':
-                        if len(stack[-1].tags.intersection(set([_layer.tag.Tag('p', 'p')]))):
-                            item_tagged = '<i data-abbr>' + item + '</i>'
-                        elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))):
-                            item_tagged = '<i>' + item + '</i>'
                     append_leaf = cur_homonym['def'][-1]['trn'][-1]['tr'][-1]
                     if 'syn' in append_leaf:
-                        append_leaf['syn'][-1]['text'] += item_tagged
+                        append_leaf['syn'][-1]['text'] += wrap_tags(stack, item)
                     else:
-                        append_leaf['text'] += item_tagged
+                        append_leaf['text'] += wrap_tags(stack, item)
                 elif line_state & CONTINUE_TRANSLATION:
                     greek = re.findall(r'^(\d+)\. ', item)
                     if len(greek):
@@ -377,31 +381,37 @@ class FlawlessDSLParser(object):
                             cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] += text
                             cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['tr'] = tr
                     else:
-                        item_tagged = item
-                        if item.strip() != '':
-                            if len(stack[-1].tags.intersection(set([_layer.tag.Tag('p', 'p')]))):
-                                item_tagged = '<i data-abbr>' + item + '</i>'
-                            elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))):
-                                item_tagged = '<i>' + item + '</i>'
                         if not len(cur_homonym['def'][-1]['trn'][-1]['ex']):
                             cur_homonym['def'][-1]['trn'][-1]['ex'].append({})
                         if 'text' not in cur_homonym['def'][-1]['trn'][-1]['ex'][-1]:
-                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] = item_tagged
+                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] = wrap_tags(stack, item)
                         elif 'tr' not in cur_homonym['def'][-1]['trn'][-1]['ex'][-1]:
-                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] += item_tagged
+                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] += wrap_tags(stack, item)
                         else:
-                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['tr'] += item_tagged
-
-                elif item.strip() != '':
+                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['tr'] += wrap_tags(stack, item)
+                #todo parse irregular verb forms
+                #todo any other comments after transcription before trn
+                elif 'trn' not in cur_homonym['def'][-1] and \
+                                item.strip() != '':
                     if 'class' not in cur_homonym['def'][-1] \
                             and stack[-1].tags.issuperset(_layer.i_and_c):
                         # word category
                         cur_homonym['def'][-1]['class'] = item
-                    elif 'trn' not in cur_homonym['def'][-1] and \
-                            'area' not in cur_homonym['def'][-1] and \
+                    elif 'area' not in cur_homonym['def'][-1] and \
                             stack[-1].tags.issuperset(set([_layer.p_tag])):
                         # word area
                         cur_homonym['def'][-1]['area'] = item
+                    elif line_state & APPEND_COMMENT or \
+                            'com' not in cur_homonym['def'][-1] and \
+                            not len(stack[-1].tags.difference(set([_layer.tag.Tag('i', 'i')]))) and \
+                            len(stack[-1].tags):
+                        #comment or maybe link
+                        #todo analyze equal character =
+                        if not line_state & APPEND_COMMENT:
+                            line_state |= APPEND_COMMENT
+                            cur_homonym['def'][-1]['com'] = wrap_tags(stack, item)
+                        else:
+                            cur_homonym['def'][-1]['com'] += wrap_tags(stack, item)
 
                 state = TEXT
                 continue
@@ -410,7 +420,6 @@ class FlawlessDSLParser(object):
             process_closing_tags(stack, closings)
         # shutdown unclosed tags
         return ''.join(map(lambda l: l.text, stack))
-
 
     def put_brackets_away(self, line):
         """put away \[, \] and brackets that does not belong to any of given tags.
