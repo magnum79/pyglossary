@@ -332,5 +332,7 @@ def glos_add_entry(glos, current_key, current_key_alters, current_text, article_
     glos.addEntry(
         [current_key] + current_key_alters,
         # '\n'.join(current_text),
-        json.dumps(article_tree, separators=(',', ':'), ensure_ascii=False)
+        json.dumps(article_tree, separators=(',', ':'), ensure_ascii=False).
+            replace('\\\\\u0000\u0001', '[').
+            replace('\\\\\u0000\u0002', ']')
     )

@@ -204,11 +204,11 @@ class FlawlessDSLParser(object):
 
         if 'hom' in article_tree:
             cur_homonym = article_tree['hom'][-1]
-            margin = 2
-        elif 'def' in article_tree:
-            if 'numB' in article_tree['def'][-1]:
-                #more than one word class
-                margin = 1
+            margin += 1
+        if 'def' in cur_homonym and \
+                        'numB' in cur_homonym['def'][-1]:
+            #more than one word class
+            margin += 1
 
         line_state = 0
 
@@ -256,12 +256,19 @@ class FlawlessDSLParser(object):
                     _layer.Layer(stack)
                 stack[-1].text += item
 
+                # first translation is on the same line with transcription
+                # if len(stack) == 2 and \
+                #         not len(stack[0].tags) and \
+                #         len(stack[-1].tags) == 1 and \
+                #         stack[-1].tags.copy().pop().closing == 'm' and \
+                #         item == '1.':
+                #     margin -= 1
+
                 # example starts
                 if stack[0].tags.issuperset(set([_layer.tag.Tag('*' ,'*'),_layer.tag.Tag('ex' ,'ex')])):
                     line_state |= START_EXAMPLE
                     if len(stack) > 1:
                         line_state |= APPEND_EXAMPLE
-
                 # translation starts
                 elif len(stack[0].tags.intersection(set([_layer.tag.Tag('m'+str(margin+1), 'm')]))) or \
                         len(stack[-1].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')]))) or \
@@ -285,7 +292,7 @@ class FlawlessDSLParser(object):
                         line_state |= START_HOMONYM
                         if item == 'I':
                             line_state |= FIRST_HOMONYM
-                            #margin += 1
+                            margin += 1
                     # line starts with arabic number like '1.'
                     elif len(re.findall(r'^\d+\.', item)):
                         line_state |= START_CLASS
