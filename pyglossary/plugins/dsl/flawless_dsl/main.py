@@ -256,14 +256,6 @@ class FlawlessDSLParser(object):
                     _layer.Layer(stack)
                 stack[-1].text += item
 
-                # first translation is on the same line with transcription
-                # if len(stack) == 2 and \
-                #         not len(stack[0].tags) and \
-                #         len(stack[-1].tags) == 1 and \
-                #         stack[-1].tags.copy().pop().closing == 'm' and \
-                #         item == '1.':
-                #     margin -= 1
-
                 # example starts
                 if stack[0].tags.issuperset(set([_layer.tag.Tag('*' ,'*'),_layer.tag.Tag('ex' ,'ex')])):
                     line_state |= START_EXAMPLE
@@ -335,6 +327,8 @@ class FlawlessDSLParser(object):
 
                 if line_state & APPEND_TRANSLATION:
                     item_tagged = item
+                    #todo check where translation comments should belong - to num or to text - abandon I 2. 4.
+                    #todo check if ♢ idioms can be extracted from samples to their own hierarchy level - abandon I 2. 5.
                     if item.strip() != '':
                         if len(stack[-1].tags.intersection(set([_layer.tag.Tag('p', 'p')]))):
                             item_tagged = '<i data-abbr>' + item + '</i>'
@@ -403,8 +397,9 @@ class FlawlessDSLParser(object):
                             and stack[-1].tags.issuperset(_layer.i_and_c):
                         # word category
                         cur_homonym['def'][-1]['class'] = item
-                    elif 'area' not in cur_homonym['def'][-1] \
-                            and stack[-1].tags.issuperset(set([_layer.p_tag])):
+                    elif 'trn' not in cur_homonym['def'][-1] and \
+                            'area' not in cur_homonym['def'][-1] and \
+                            stack[-1].tags.issuperset(set([_layer.p_tag])):
                         # word area
                         cur_homonym['def'][-1]['area'] = item
 
