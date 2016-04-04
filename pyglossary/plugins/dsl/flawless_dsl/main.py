@@ -381,7 +381,7 @@ class FlawlessDSLParser(object):
                     if not line_state & APPEND_EXAMPLE:
                         cur_homonym['def'][-1]['trn'][-1]['ex'].append({})
                     if len(re.findall(r' - ', item)):
-                        text, tr = re.split(r' - ', item)
+                        text, tr = item.split(r' - ', 1)
                         if not line_state & APPEND_EXAMPLE:
                             cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] = text
                             cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['tr'] = tr
