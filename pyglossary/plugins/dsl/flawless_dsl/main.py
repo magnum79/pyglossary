@@ -283,7 +283,6 @@ class FlawlessDSLParser(object):
                          not len(stack[0].tags) and \
                          len(stack[-2].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')])))):
                     line_state |= START_TRANSLATION
-                    # special case - [m#] tag is on the same line with transcription
                     if (not len(stack[-1].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')]))) and \
                                     len(stack) > 1):
                         line_state |= APPEND_TRANSLATION
@@ -344,10 +343,19 @@ class FlawlessDSLParser(object):
                     else:
                         append_leaf['text'] += wrap_tags(stack, item)
                 elif line_state & CONTINUE_TRANSLATION:
-                    greek = re.findall(r'^(\d+)\. ', item)
-                    if len(greek):
-                        cur_homonym['def'][-1]['trn'][-1]['num'] = greek[0]
+                    greek_dot = re.findall(r'^(\d+)\. ', item)
+                    if len(greek_dot):
+                        cur_homonym['def'][-1]['trn'][-1]['num'] = greek_dot[0]
                         item = re.sub(r'^\d+. ', '', item)
+
+                    greek_bracket = re.findall(r'^(\d+)\) ', item)
+                    if len(greek_bracket):
+                        if len(greek_dot):
+                            cur_homonym['def'][-1]['trn'][-1]['num'] = greek_dot[0]
+                        else:
+                            cur_homonym['def'][-1]['trn'][-1]['num'] = cur_homonym['def'][-1]['trn'][-2]['num']
+                        cur_homonym['def'][-1]['trn'][-1]['sence'] = greek_bracket[0]
+                        item = re.sub(r'^\d+\) ', '', item)
 
                     for variant in re.split(r'; ', item):
                         synonims = re.split(r', ', variant)

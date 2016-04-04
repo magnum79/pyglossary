@@ -38,5 +38,5 @@ class TestRead(TestCase):
 
     def test_word_abandonment(self):
         before = 'En-Ru-Apresyan_abandonment.dsl'
-        after = '''{"text":"abandonment","hom":[{"numRB":"I","def":[{"trn":[{"num":"1","tr":[{"text":"1) оставление"}]},{"tr":[{"text":"2) <i data-abbr>юр.</i> оставление жены, ребёнка"}]},{"num":"2","tr":[{"text":"заброшенность","syn":[{"text":"запущенность"}]}]},{"num":"3","tr":[{"text":"1) <i data-abbr>юр.</i> отказ (<i>от права, иска</i>)"}]},{"tr":[{"text":"2) <i data-abbr>страх.</i> абандон"}]}],"ts":"ə'bændənmənt","class":"n"}]},{"numRB":"II","def":[{"com":"<i>= abandon</i><sup>2 </sup>","ts":"ə'bændənmənt"}]}]}'''
+        after = '''{"text":"abandonment","hom":[{"numRB":"I","def":[{"trn":[{"num":"1","tr":[{"text":"оставление"}],"sence":"1"},{"num":"1","tr":[{"text":"<i data-abbr>юр.</i> оставление жены, ребёнка"}],"sence":"2"},{"num":"2","tr":[{"text":"заброшенность","syn":[{"text":"запущенность"}]}]},{"num":"3","tr":[{"text":"<i data-abbr>юр.</i> отказ (<i>от права, иска</i>)"}],"sence":"1"},{"num":"3","tr":[{"text":"<i data-abbr>страх.</i> абандон"}],"sence":"2"}],"ts":"ə'bændənmənt","class":"n"}]},{"numRB":"II","def":[{"com":"<i>= abandon</i><sup>2 </sup>","ts":"ə'bændənmənt"}]}]}'''
         test_word(self, before, after)
