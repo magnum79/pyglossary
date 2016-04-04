@@ -40,3 +40,8 @@ class TestRead(TestCase):
         before = 'En-Ru-Apresyan_abandonment.dsl'
         after = '''{"text":"abandonment","hom":[{"numRB":"I","def":[{"trn":[{"num":"1","tr":[{"text":"оставление"}],"sence":"1"},{"num":"1","tr":[{"text":"<i data-abbr>юр.</i> оставление жены, ребёнка"}],"sence":"2"},{"num":"2","tr":[{"text":"заброшенность","syn":[{"text":"запущенность"}]}]},{"num":"3","tr":[{"text":"<i data-abbr>юр.</i> отказ (<i>от права, иска</i>)"}],"sence":"1"},{"num":"3","tr":[{"text":"<i data-abbr>страх.</i> абандон"}],"sence":"2"}],"ts":"ə'bændənmənt","class":"n"}]},{"numRB":"II","def":[{"com":"<i>= abandon</i><sup>2 </sup>","ts":"ə'bændənmənt"}]}]}'''
         test_word(self, before, after)
+
+    def test_word_was(self):
+        before = 'En-Ru-Apresyan_was.dsl'
+        after = '''{"text":"was","def":[{"ts":"wɒz (полная форма); wəz,wz (редуцированные формы)","trn":[{"tr":[{"text":"<i>1-е и 3-е </i><i data-abbr>л.</i> <i data-abbr>ед.</i> <i data-abbr>ч.</i><i> прошедшего времени </i><i data-abbr>гл.</i> be"}]}]}]}'''
+        test_word(self, before, after)

@@ -106,6 +106,7 @@ class FlawlessDSLParser(object):
         'sub',
         'ref',
         'url',
+        'com',
     })):
         """
         :type tags: set[str | tuple[str]] | frozenset[str | tuple[str]]
@@ -278,8 +279,7 @@ class FlawlessDSLParser(object):
                 # translation starts
                 elif len(stack[0].tags.intersection(set([_layer.tag.Tag('m'+str(margin+1), 'm')]))) or \
                         len(stack[-1].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')]))) or \
-                        (not len(stack[-1].tags.difference(set([_layer.tag.Tag('i', 'i')]))) and \
-                         len(stack[-1].tags) and \
+                        (len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))) and \
                          not len(stack[0].tags) and \
                          len(stack[-2].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')])))):
                     line_state |= START_TRANSLATION
@@ -360,13 +360,13 @@ class FlawlessDSLParser(object):
                     for variant in re.split(r'; ', item):
                         synonims = re.split(r', ', variant)
                         cur_homonym['def'][-1]['trn'][-1]['tr'].append({})
-                        cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['text'] = synonims[0]
+                        cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['text'] = wrap_tags(stack, synonims[0])
                         if len(synonims) > 1:
                             del synonims[0]
                             cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['syn'] = list()
                             for synonim in synonims:
                                 cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['syn'].append({})
-                                cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['syn'][-1]['text'] = synonim
+                                cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['syn'][-1]['text'] = wrap_tags(stack, synonim)
 
                 if line_state & START_TRANSCRIPTION:
                     line_state ^= START_TRANSCRIPTION
@@ -375,7 +375,7 @@ class FlawlessDSLParser(object):
                         cur_homonym['def'] = [{}]
                     cur_homonym['def'][-1]['ts'] = item.strip(' \\'+BRACKET_L+BRACKET_R)
 
-                if line_state & START_EXAMPLE:
+                elif line_state & START_EXAMPLE:
                     if 'ex' not in cur_homonym['def'][-1]['trn'][-1]:
                         cur_homonym['def'][-1]['trn'][-1]['ex'] = list()
                     if not line_state & APPEND_EXAMPLE:
@@ -411,8 +411,7 @@ class FlawlessDSLParser(object):
                         cur_homonym['def'][-1]['area'] = item
                     elif line_state & APPEND_COMMENT or \
                             'com' not in cur_homonym['def'][-1] and \
-                            not len(stack[-1].tags.difference(set([_layer.tag.Tag('i', 'i')]))) and \
-                            len(stack[-1].tags):
+                            len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))):
                         #comment or maybe link
                         #todo analyze equal character =
                         if not line_state & APPEND_COMMENT:
