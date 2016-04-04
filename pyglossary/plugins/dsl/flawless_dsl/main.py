@@ -107,6 +107,7 @@ class FlawlessDSLParser(object):
         'ref',
         'url',
         'com',
+        ('lang', '( .+?)'),
     })):
         """
         :type tags: set[str | tuple[str]] | frozenset[str | tuple[str]]
@@ -329,46 +330,68 @@ class FlawlessDSLParser(object):
                 if line_state & START_TRANSLATION and not line_state & CONTINUE_TRANSLATION:
                     line_state ^= START_TRANSLATION
                     line_state |= CONTINUE_TRANSLATION
-                    if 'trn' not in cur_homonym['def'][-1]:
-                        cur_homonym['def'][-1]['trn'] = list()
-                    cur_homonym['def'][-1]['trn'].append({})
-                    cur_homonym['def'][-1]['trn'][-1]['tr'] = list()
+                    #homonym inside definition
+                    if len(re.findall(r'^[IV]+.*$', item)):
+                        line_state ^= CONTINUE_TRANSLATION
+                        if 'hom' not in cur_homonym['def'][-1]:
+                            cur_homonym['def'][-1]['hom'] = list()
+                        cur_homonym['def'][-1]['hom'].append({})
+                        cur_homonym['def'][-1]['hom'][-1]['numR'] = item
+                    elif 'hom' in cur_homonym['def'][-1]:
+                        if 'trn' not in cur_homonym['def'][-1]['hom'][-1]:
+                            cur_homonym['def'][-1]['hom'][-1]['trn'] = list()
+                        cur_homonym['def'][-1]['hom'][-1]['trn'].append({})
+                        cur_homonym['def'][-1]['hom'][-1]['trn'][-1]['tr'] = list()
+                    else:
+                        if 'trn' not in cur_homonym['def'][-1]:
+                            cur_homonym['def'][-1]['trn'] = list()
+                        cur_homonym['def'][-1]['trn'].append({})
+                        cur_homonym['def'][-1]['trn'][-1]['tr'] = list()
+
+                if line_state & APPEND_TRANSLATION or \
+                                line_state & CONTINUE_TRANSLATION or \
+                                line_state & START_EXAMPLE:
+                    if 'hom' not in cur_homonym['def'][-1]:
+                        cur_trn = cur_homonym['def'][-1]['trn']
+                    else:
+                        cur_trn = cur_homonym['def'][-1]['hom'][-1]['trn']
 
                 if line_state & APPEND_TRANSLATION:
                     #todo check where translation comments should belong - to num or to text - abandon I 2. 4.
                     #todo check if ♢ idioms can be extracted from samples to their own hierarchy level - abandon I 2. 5.
-                    append_leaf = cur_homonym['def'][-1]['trn'][-1]['tr'][-1]
+                    append_leaf = cur_trn[-1]['tr'][-1]
                     if 'syn' in append_leaf:
                         append_leaf['syn'][-1]['text'] += wrap_tags(stack, item)
                     else:
                         append_leaf['text'] += wrap_tags(stack, item)
+
                 elif line_state & CONTINUE_TRANSLATION:
                     greek_dot = re.findall(r'^(\d+)\. ', item)
                     if len(greek_dot):
-                        cur_homonym['def'][-1]['trn'][-1]['num'] = greek_dot[0]
+                        cur_trn[-1]['num'] = greek_dot[0]
                         item = re.sub(r'^\d+. ', '', item)
 
                     greek_bracket = re.findall(r'^(\d+)\) ', item)
                     if len(greek_bracket):
                         if len(greek_dot):
-                            cur_homonym['def'][-1]['trn'][-1]['num'] = greek_dot[0]
+                            cur_trn[-1]['num'] = greek_dot[0]
                         else:
-                            cur_homonym['def'][-1]['trn'][-1]['num'] = cur_homonym['def'][-1]['trn'][-2]['num']
-                        cur_homonym['def'][-1]['trn'][-1]['sence'] = greek_bracket[0]
+                            cur_trn[-1]['num'] = cur_trn[-2]['num']
+                        cur_trn[-1]['sense'] = greek_bracket[0]
                         item = re.sub(r'^\d+\) ', '', item)
-
+                    #todo also do this in APPEND_TRANSLATION - be II Б 2. 2), but not in comments - be II Б 15. 2), and not in double language defs - be II Б 5. and be II Б 6.
                     for variant in re.split(r'; ', item):
                         synonims = re.split(r', ', variant)
-                        cur_homonym['def'][-1]['trn'][-1]['tr'].append({})
-                        cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['text'] = wrap_tags(stack, synonims[0])
+                        cur_trn[-1]['tr'].append({})
+                        cur_trn[-1]['tr'][-1]['text'] = wrap_tags(stack, synonims[0])
                         if len(synonims) > 1:
                             del synonims[0]
-                            cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['syn'] = list()
+                            cur_trn[-1]['tr'][-1]['syn'] = list()
                             for synonim in synonims:
-                                cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['syn'].append({})
-                                cur_homonym['def'][-1]['trn'][-1]['tr'][-1]['syn'][-1]['text'] = wrap_tags(stack, synonim)
+                                cur_trn[-1]['tr'][-1]['syn'].append({})
+                                cur_trn[-1]['tr'][-1]['syn'][-1]['text'] = wrap_tags(stack, synonim)
 
-                if line_state & START_TRANSCRIPTION:
+                elif line_state & START_TRANSCRIPTION:
                     line_state ^= START_TRANSCRIPTION
                     if 'def' not in cur_homonym:
                         #if line starts with transcription, not with bold greek number
@@ -376,27 +399,33 @@ class FlawlessDSLParser(object):
                     cur_homonym['def'][-1]['ts'] = item.strip(' \\'+BRACKET_L+BRACKET_R)
 
                 elif line_state & START_EXAMPLE:
-                    if 'ex' not in cur_homonym['def'][-1]['trn'][-1]:
-                        cur_homonym['def'][-1]['trn'][-1]['ex'] = list()
+                    if 'ex' not in cur_trn[-1]:
+                        cur_trn[-1]['ex'] = list()
+                    #todo analyse cyrillic numeration а) б) in example sense translations - be II Б 2. 1)
+                    if len(cur_trn[-1]['ex']) and \
+                        'tr' not in cur_trn[-1]['ex'][-1]:
+                        line_state |= APPEND_EXAMPLE
                     if not line_state & APPEND_EXAMPLE:
-                        cur_homonym['def'][-1]['trn'][-1]['ex'].append({})
-                    if len(re.findall(r' - ', item)):
+                        cur_trn[-1]['ex'].append({})
+                    if len(re.findall(r' - ', item)) and \
+                            stack[-1].text != item:
                         text, tr = item.split(r' - ', 1)
                         if not line_state & APPEND_EXAMPLE:
-                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] = text
-                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['tr'] = tr
+                            cur_trn[-1]['ex'][-1]['text'] = text
+                            cur_trn[-1]['ex'][-1]['tr'] = tr
                         else:
-                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] += text
-                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['tr'] = tr
+                            cur_trn[-1]['ex'][-1]['text'] += text
+                            cur_trn[-1]['ex'][-1]['tr'] = tr
                     else:
-                        if not len(cur_homonym['def'][-1]['trn'][-1]['ex']):
-                            cur_homonym['def'][-1]['trn'][-1]['ex'].append({})
-                        if 'text' not in cur_homonym['def'][-1]['trn'][-1]['ex'][-1]:
-                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] = wrap_tags(stack, item)
-                        elif 'tr' not in cur_homonym['def'][-1]['trn'][-1]['ex'][-1]:
-                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['text'] += wrap_tags(stack, item)
+                        if not len(cur_trn[-1]['ex']):
+                            cur_trn[-1]['ex'].append({})
+                        if 'text' not in cur_trn[-1]['ex'][-1]:
+                            cur_trn[-1]['ex'][-1]['text'] = wrap_tags(stack, item)
+                        elif 'tr' not in cur_trn[-1]['ex'][-1]:
+                            cur_trn[-1]['ex'][-1]['text'] += wrap_tags(stack, item)
                         else:
-                            cur_homonym['def'][-1]['trn'][-1]['ex'][-1]['tr'] += wrap_tags(stack, item)
+                            cur_trn[-1]['ex'][-1]['tr'] += wrap_tags(stack, item)
+
                 #todo parse irregular verb forms
                 #todo any other comments after transcription before trn
                 elif 'trn' not in cur_homonym['def'][-1] and \

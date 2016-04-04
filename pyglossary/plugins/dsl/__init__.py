@@ -162,8 +162,6 @@ def _clean_tags(line, audio, article_tree):
         .replace('[!trs]', '') \
         .replace('[/!trs]', '')
 
-    # remove lang tags
-    line = re_lang_open.sub('', line).replace('[/lang]', '')
     # remove t tags
     line = line.replace('[t]', '''<!-- T --><span style="font-family:'Helvetica'">''')
     line = line.replace('[/t]', '</span><!-- T -->')
@@ -180,6 +178,9 @@ def _clean_tags(line, audio, article_tree):
     # then leave it alone.  only wrap in '[m1]' when no 'm' tag found at all.
     if not re_m_open.search(line):
         line = '[m1]%s[/m]' % line
+
+    # remove lang tags
+    line = re_lang_open.sub('', line).replace('[/lang]', '')
 
     # remove com tags
     line = line.replace('[com]', '').replace('[/com]', '')
