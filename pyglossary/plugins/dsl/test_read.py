@@ -65,3 +65,8 @@ class TestRead(TestCase):
         before = 'En-Ru-Apresyan_aet..dsl'
         after = '''{"text":"aet.","def":[{"trn":[{"tr":[{"text":"в возрасте ... (<i>обычно о смерти</i>)"}],"ex":[{"text":"here lies <i>N. N. </i>aet. 71","tr":"здесь покоится <i>N. N.</i>, скончавшийся в возрасте 71 года"}]}]}]}'''
         test_word(self, before, after)
+
+    def test_word_aetat(self):
+        before = 'En-Ru-Apresyan_aetat..dsl'
+        after = '''{"text":"aetat.","def":[{"com":"<i>= aet.</i>"}]}'''
+        test_word(self, before, after)

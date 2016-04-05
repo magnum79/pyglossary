@@ -209,6 +209,14 @@ class FlawlessDSLParser(object):
                     item_tagged = '<sup>' + item + '</sup>'
             return item_tagged
 
+        def append_comment(line_state, cur_homonym, stack, item):
+            if not line_state & APPEND_COMMENT:
+                line_state |= APPEND_COMMENT
+                cur_homonym['def'][-1]['com'] = wrap_tags(stack, item)
+            else:
+                cur_homonym['def'][-1]['com'] += wrap_tags(stack, item)
+            return line_state
+
         state = TEXT
         stack = []
         closings = set()
@@ -438,6 +446,11 @@ class FlawlessDSLParser(object):
                         else:
                             cur_trn[-1]['ex'][-1]['tr'] += wrap_tags(stack, item)
 
+                #comment on first line, without transcription
+                elif 'def' not in cur_homonym and \
+                        stack[-1].tags.issuperset(set([_layer.tag.Tag('i', 'i'),_layer.tag.Tag('com', 'com')])):
+                    cur_homonym['def'] = [{}]
+                    line_state = append_comment(line_state, cur_homonym, stack, item)
                 #todo parse irregular verb forms
                 #todo any other comments after transcription before trn
                 #todo check actual class, not just comment when translation moved to top - 'd word
@@ -459,11 +472,7 @@ class FlawlessDSLParser(object):
                             len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))):
                         #comment or maybe link
                         #todo analyze equal character =
-                        if not line_state & APPEND_COMMENT:
-                            line_state |= APPEND_COMMENT
-                            cur_homonym['def'][-1]['com'] = wrap_tags(stack, item)
-                        else:
-                            cur_homonym['def'][-1]['com'] += wrap_tags(stack, item)
+                        line_state = append_comment(line_state, cur_homonym, stack, item)
 
                 state = TEXT
                 continue
