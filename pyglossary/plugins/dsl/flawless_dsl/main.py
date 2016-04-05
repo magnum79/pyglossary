@@ -375,7 +375,8 @@ class FlawlessDSLParser(object):
                     if len(greek_bracket):
                         if len(greek_dot):
                             cur_trn[-1]['num'] = greek_dot[0]
-                        else:
+                        elif len(cur_trn) > 1 and \
+                                'num' in cur_trn[-2]:
                             cur_trn[-1]['num'] = cur_trn[-2]['num']
                         cur_trn[-1]['sense'] = greek_bracket[0]
                         item = re.sub(r'^\d+\) ', '', item)
