@@ -302,6 +302,7 @@ class FlawlessDSLParser(object):
                             line_state |= FIRST_CLASS
                             margin += 1
                 #assuming first line contains transcription, word category, and sometimes word forms and comments (area)
+                #but check if it's not contains closing sqare bracket ] and it's acutal word category and area, not translation - a I
                 elif len(re.findall(r'\\' + BRACKET_L, item)) and \
                         len(re.findall(r'\\' + BRACKET_R, item)):
                     line_state |= START_TRANSCRIPTION
@@ -330,6 +331,10 @@ class FlawlessDSLParser(object):
                 if line_state & START_TRANSLATION and not line_state & CONTINUE_TRANSLATION:
                     line_state ^= START_TRANSLATION
                     line_state |= CONTINUE_TRANSLATION
+                    #translation on the first line
+                    if 'def' not in cur_homonym:
+                        cur_homonym['def'] = []
+                        cur_homonym['def'].append({})
                     #homonym inside definition
                     if len(re.findall(r'^[IV]+.*$', item)):
                         line_state ^= CONTINUE_TRANSLATION
@@ -385,6 +390,8 @@ class FlawlessDSLParser(object):
                         cur_trn[-1]['sense'] = greek_bracket[0]
                         item = re.sub(r'^\d+\) ', '', item)
                     #todo also do this in APPEND_TRANSLATION - be II Б 2. 2), but not in comments - be II Б 15. 2), and not in double language defs - be II Б 5. and be II Б 6.
+                    #todo do not split comma in special cases (i.e. long sentence) - a 5. 1), a 6.
+                    #todo split translation and synonims after comment - a I 8., a I 11. 2), a I 12.
                     for variant in re.split(r'; ', item):
                         synonims = re.split(r', ', variant)
                         cur_trn[-1]['tr'].append({})
@@ -434,6 +441,8 @@ class FlawlessDSLParser(object):
                 #todo parse irregular verb forms
                 #todo any other comments after transcription before trn
                 #todo check actual class, not just comment when translation moved to top - 'd word
+                #todo do not extract area if it's within brackets - a word
+                #todo do not extract transcription if it's within brackets, and first transcription already extracted - a word
                 elif 'trn' not in cur_homonym['def'][-1] and \
                                 item.strip() != '':
                     if 'class' not in cur_homonym['def'][-1] \
@@ -444,6 +453,7 @@ class FlawlessDSLParser(object):
                             stack[-1].tags.issuperset(set([_layer.p_tag])):
                         # word area
                         cur_homonym['def'][-1]['area'] = item
+                    #todo treat second [p] as comment start (currently ignored) - a II
                     elif line_state & APPEND_COMMENT or \
                             'com' not in cur_homonym['def'][-1] and \
                             len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))):
