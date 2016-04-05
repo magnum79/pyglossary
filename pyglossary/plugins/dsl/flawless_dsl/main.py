@@ -352,9 +352,13 @@ class FlawlessDSLParser(object):
                                 line_state & CONTINUE_TRANSLATION or \
                                 line_state & START_EXAMPLE:
                     if 'hom' not in cur_homonym['def'][-1]:
-                        cur_trn = cur_homonym['def'][-1]['trn']
+                        cur_trn = cur_homonym['def'][-1]
                     else:
-                        cur_trn = cur_homonym['def'][-1]['hom'][-1]['trn']
+                        cur_trn = cur_homonym['def'][-1]['hom'][-1]
+                    if 'trn' not in cur_trn:
+                        cur_trn['trn'] = list()
+                        cur_trn['trn'].append({})
+                    cur_trn = cur_trn['trn']
 
                 if line_state & APPEND_TRANSLATION:
                     #todo check where translation comments should belong - to num or to text - abandon I 2. 4.
@@ -429,6 +433,7 @@ class FlawlessDSLParser(object):
 
                 #todo parse irregular verb forms
                 #todo any other comments after transcription before trn
+                #todo check actual class, not just comment when translation moved to top - 'd word
                 elif 'trn' not in cur_homonym['def'][-1] and \
                                 item.strip() != '':
                     if 'class' not in cur_homonym['def'][-1] \

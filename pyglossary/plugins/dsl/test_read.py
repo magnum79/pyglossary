@@ -55,3 +55,8 @@ class TestRead(TestCase):
         before = 'En-Ru-Apresyan_\'cello.dsl'
         after = '''{"text":"'cello","def":[{"area":"pl","com":"<i> (</i><i> -os</i><i>, celli, 'celli; </i><i data-abbr>сокр.</i><i> от violoncello)</i>","ts":"-{'tʃel}əʋz","trn":[{"tr":[{"text":"виолончель"}],"sense":"1"},{"tr":[{"text":"<i data-abbr>разг.</i> виолончелист, <i data-abbr>особ.</i> оркестрант"}],"sense":"2"},{"tr":[{"text":"<i data-abbr>pl</i> группа виолончелей (<i>в оркестре</i>)"}],"sense":"3"}],"class":"n"}]}'''
         test_word(self, before, after)
+
+    def test_word_d(self):
+        before = 'En-Ru-Apresyan_\'d.dsl'
+        after = '''{"text":"'d","def":[{"area":"сокр.","com":"<i> от had, should, would (в любых типах предложений, за исключением общевопросительных)</i>","ts":"-d","trn":[{"ex":[{"text":"I'd better go","tr":"я, пожалуй, пойду"},{"text":"I'd like to work","tr":"я бы хотел поработать"}]}],"class":"разг."}]}'''
+        test_word(self, before, after)
