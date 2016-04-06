@@ -210,7 +210,8 @@ class FlawlessDSLParser(object):
             return item_tagged
 
         def append_comment(line_state, cur_def, stack, item):
-            if not line_state & APPEND_COMMENT:
+            if not line_state & APPEND_COMMENT or \
+                    not 'com' in cur_def:
                 line_state |= APPEND_COMMENT
                 cur_def['com'] = wrap_tags(stack, item)
             else:
@@ -358,7 +359,6 @@ class FlawlessDSLParser(object):
                             cur_homonym['def'][-1]['hom'][-1]['numR'] += numR_parts[1]+numR_parts[2]
                         if numR_match.endpos > numR_match.regs[-1][1]:
                             item = item[numR_match.regs[-1][1]:]
-                            cur_homonym['def'][-1]['hom'][-1]['com'] = ''
                             line_state |= APPEND_COMMENT
                     #comment after roman numeration
                     if len(re.findall(r'^[IV]+', stack[0].text)) and \
@@ -483,9 +483,9 @@ class FlawlessDSLParser(object):
                     if 'hom' in cur_def:
                         cur_def = cur_def['hom'][-1]
                     if 'trn' not in cur_def:
-                        #if not len(stack[0].tags.intersection(set([_layer.tag.Tag('m'+str(margin+1), 'm')]))):
-                        #if 'com' not in cur_def:
-                        if 'class' not in cur_def and \
+                        if line_state & APPEND_COMMENT:
+                            line_state = append_comment(line_state, cur_def, stack, item)
+                        elif 'class' not in cur_def and \
                                 'com' not in cur_def and \
                                 stack[-1].tags.issuperset(set([_layer.p_tag])) and \
                                 item.strip() != '':
@@ -498,8 +498,7 @@ class FlawlessDSLParser(object):
                             # word area
                             cur_def['area'] = item
                         #todo treat second [p] as comment start (currently ignored) - a II
-                        elif line_state & APPEND_COMMENT or \
-                                'com' not in cur_def and \
+                        elif 'com' not in cur_def and \
                                 len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))) and \
                                 item.strip() != '':
                             #comment or maybe link
