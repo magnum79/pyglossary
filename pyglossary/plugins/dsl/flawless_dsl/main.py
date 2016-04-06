@@ -209,12 +209,12 @@ class FlawlessDSLParser(object):
                     item_tagged = '<sup>' + item + '</sup>'
             return item_tagged
 
-        def append_comment(line_state, cur_homonym, stack, item):
+        def append_comment(line_state, cur_def, stack, item):
             if not line_state & APPEND_COMMENT:
                 line_state |= APPEND_COMMENT
-                cur_homonym['def'][-1]['com'] = wrap_tags(stack, item)
+                cur_def['com'] = wrap_tags(stack, item)
             else:
-                cur_homonym['def'][-1]['com'] += wrap_tags(stack, item)
+                cur_def['com'] += wrap_tags(stack, item)
             return line_state
 
         state = TEXT
@@ -288,12 +288,13 @@ class FlawlessDSLParser(object):
                 # translation starts
                 elif len(stack[0].tags.intersection(set([_layer.tag.Tag('m'+str(margin+1), 'm')]))) or \
                         len(stack[-1].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')]))) or \
-                        (len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))) and \
-                         not len(stack[0].tags) and \
+                        (len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))) and
+                         not len(stack[0].tags) and
                          len(stack[-2].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')])))):
                     line_state |= START_TRANSLATION
                     if (not len(stack[-1].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')]))) and \
-                                    len(stack) > 1):
+                                    len(stack) > 1) or \
+                                    stack[-1].text != item:
                         line_state |= APPEND_TRANSLATION
                 # text is bold
                 elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('b', 'b')]))) == 1:
@@ -344,34 +345,49 @@ class FlawlessDSLParser(object):
                         cur_homonym['def'] = []
                         cur_homonym['def'].append({})
                     #homonym inside definition
-                    if len(re.findall(r'^[IV]+.*$', item)):
+                    if len(re.findall(r'^[IV]+', item)):
                         line_state ^= CONTINUE_TRANSLATION
                         if 'hom' not in cur_homonym['def'][-1]:
                             cur_homonym['def'][-1]['hom'] = list()
                         cur_homonym['def'][-1]['hom'].append({})
-                        cur_homonym['def'][-1]['hom'][-1]['numR'] = item
-                    elif 'hom' in cur_homonym['def'][-1]:
-                        if 'trn' not in cur_homonym['def'][-1]['hom'][-1]:
-                            cur_homonym['def'][-1]['hom'][-1]['trn'] = list()
-                        cur_homonym['def'][-1]['hom'][-1]['trn'].append({})
-                        cur_homonym['def'][-1]['hom'][-1]['trn'][-1]['tr'] = list()
-                    else:
-                        if 'trn' not in cur_homonym['def'][-1]:
-                            cur_homonym['def'][-1]['trn'] = list()
-                        cur_homonym['def'][-1]['trn'].append({})
-                        cur_homonym['def'][-1]['trn'][-1]['tr'] = list()
+                        re_numR_parts = re.compile(r'(^[IV]+)(\s?)([А-Я]*)(\s?)')
+                        numR_match = re.match(re_numR_parts, item)
+                        numR_parts = re.findall(re_numR_parts, item)[0]
+                        cur_homonym['def'][-1]['hom'][-1]['numR'] = numR_parts[0]
+                        if numR_parts[2] != '':
+                            cur_homonym['def'][-1]['hom'][-1]['numR'] += numR_parts[1]+numR_parts[2]
+                        if numR_match.endpos > numR_match.regs[-1][1]:
+                            item = item[numR_match.regs[-1][1]:]
+                            cur_homonym['def'][-1]['hom'][-1]['com'] = ''
+                            line_state |= APPEND_COMMENT
+                    #comment after roman numeration
+                    if len(re.findall(r'^[IV]+', stack[0].text)) and \
+                            (len(stack) > 1 or
+                                     stack[-1].text != item):
+                        if line_state & CONTINUE_TRANSLATION:
+                            line_state ^= CONTINUE_TRANSLATION
+                        if line_state & APPEND_TRANSLATION:
+                            line_state ^= APPEND_TRANSLATION
+                        line_state |= APPEND_COMMENT
+                    if line_state & CONTINUE_TRANSLATION:
+                        cur_def = cur_homonym['def'][-1]
+                        if 'hom' in cur_def:
+                            cur_def = cur_def['hom'][-1]
+                        if 'trn' not in cur_def:
+                            cur_def['trn'] = list()
+                        cur_def['trn'].append({})
+                        cur_def['trn'][-1]['tr'] = list()
 
                 if line_state & APPEND_TRANSLATION or \
                                 line_state & CONTINUE_TRANSLATION or \
                                 line_state & START_EXAMPLE:
-                    if 'hom' not in cur_homonym['def'][-1]:
-                        cur_trn = cur_homonym['def'][-1]
-                    else:
-                        cur_trn = cur_homonym['def'][-1]['hom'][-1]
-                    if 'trn' not in cur_trn:
-                        cur_trn['trn'] = list()
-                        cur_trn['trn'].append({})
-                    cur_trn = cur_trn['trn']
+                    cur_def = cur_homonym['def'][-1]
+                    if 'hom' in cur_def:
+                        cur_def = cur_def['hom'][-1]
+                    if 'trn' not in cur_def:
+                        cur_def['trn'] = list()
+                        cur_def['trn'].append({})
+                    cur_trn = cur_def['trn']
 
                 if line_state & APPEND_TRANSLATION:
                     #todo check where translation comments should belong - to num or to text - abandon I 2. 4.
@@ -400,16 +416,22 @@ class FlawlessDSLParser(object):
                     #todo also do this in APPEND_TRANSLATION - be II Б 2. 2), but not in comments - be II Б 15. 2), and not in double language defs - be II Б 5. and be II Б 6.
                     #todo do not split comma in special cases (i.e. long sentence) - a 5. 1), a 6.
                     #todo split translation and synonims after comment - a I 8., a I 11. 2), a I 12.
-                    for variant in re.split(r'; ', item):
-                        synonims = re.split(r', ', variant)
-                        cur_trn[-1]['tr'].append({})
-                        cur_trn[-1]['tr'][-1]['text'] = wrap_tags(stack, synonims[0])
-                        if len(synonims) > 1:
-                            del synonims[0]
-                            cur_trn[-1]['tr'][-1]['syn'] = list()
-                            for synonim in synonims:
-                                cur_trn[-1]['tr'][-1]['syn'].append({})
-                                cur_trn[-1]['tr'][-1]['syn'][-1]['text'] = wrap_tags(stack, synonim)
+                    #do not split comment block
+                    if stack[-1].tags.issuperset(set([_layer.tag.Tag('i', 'i'),_layer.tag.Tag('com', 'com')])):
+                        if not len(cur_trn[-1]['tr']):
+                            cur_trn[-1]['tr'].append({})
+                        cur_trn[-1]['tr'][-1]['text'] = wrap_tags(stack, item)
+                    else:
+                        for variant in re.split(r'; ', item):
+                            synonims = re.split(r', ', variant)
+                            cur_trn[-1]['tr'].append({})
+                            cur_trn[-1]['tr'][-1]['text'] = wrap_tags(stack, synonims[0])
+                            if len(synonims) > 1:
+                                del synonims[0]
+                                cur_trn[-1]['tr'][-1]['syn'] = list()
+                                for synonim in synonims:
+                                    cur_trn[-1]['tr'][-1]['syn'].append({})
+                                    cur_trn[-1]['tr'][-1]['syn'][-1]['text'] = wrap_tags(stack, synonim)
 
                 elif line_state & START_TRANSCRIPTION:
                     line_state ^= START_TRANSCRIPTION
@@ -450,29 +472,39 @@ class FlawlessDSLParser(object):
                 elif 'def' not in cur_homonym and \
                         stack[-1].tags.issuperset(set([_layer.tag.Tag('i', 'i'),_layer.tag.Tag('com', 'com')])):
                     cur_homonym['def'] = [{}]
-                    line_state = append_comment(line_state, cur_homonym, stack, item)
+                    line_state = append_comment(line_state, cur_homonym['def'][-1], stack, item)
                 #todo parse irregular verb forms
                 #todo any other comments after transcription before trn
                 #todo check actual class, not just comment when translation moved to top - 'd word
                 #todo do not extract area if it's within brackets - a word
                 #todo do not extract transcription if it's within brackets, and first transcription already extracted - a word
-                elif 'trn' not in cur_homonym['def'][-1] and \
+                else:
+                    cur_def = cur_homonym['def'][-1]
+                    if 'hom' in cur_def:
+                        cur_def = cur_def['hom'][-1]
+                    if 'trn' not in cur_def:
+                        #if not len(stack[0].tags.intersection(set([_layer.tag.Tag('m'+str(margin+1), 'm')]))):
+                        #if 'com' not in cur_def:
+                        if 'class' not in cur_def and \
+                                'com' not in cur_def and \
+                                stack[-1].tags.issuperset(set([_layer.p_tag])) and \
                                 item.strip() != '':
-                    if 'class' not in cur_homonym['def'][-1] \
-                            and stack[-1].tags.issuperset(_layer.i_and_c):
-                        # word category
-                        cur_homonym['def'][-1]['class'] = item
-                    elif 'area' not in cur_homonym['def'][-1] and \
-                            stack[-1].tags.issuperset(set([_layer.p_tag])):
-                        # word area
-                        cur_homonym['def'][-1]['area'] = item
-                    #todo treat second [p] as comment start (currently ignored) - a II
-                    elif line_state & APPEND_COMMENT or \
-                            'com' not in cur_homonym['def'][-1] and \
-                            len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))):
-                        #comment or maybe link
-                        #todo analyze equal character =
-                        line_state = append_comment(line_state, cur_homonym, stack, item)
+                            # word category
+                            cur_def['class'] = item
+                        elif 'area' not in cur_def and \
+                                'com' not in cur_def and \
+                                stack[-1].tags.issuperset(set([_layer.p_tag])) and \
+                                item.strip() != '':
+                            # word area
+                            cur_def['area'] = item
+                        #todo treat second [p] as comment start (currently ignored) - a II
+                        elif line_state & APPEND_COMMENT or \
+                                'com' not in cur_def and \
+                                len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))) and \
+                                item.strip() != '':
+                            #comment or maybe link
+                            #todo analyze equal character =
+                            line_state = append_comment(line_state, cur_def, stack, item)
 
                 state = TEXT
                 continue
