@@ -69,17 +69,15 @@ TEXT = 3
 BRACKET_L = '\0\1'
 BRACKET_R = '\0\2'
 
-START_HOMONYM = 0x1
-FIRST_HOMONYM = 0x2
-START_CLASS = 0x4
-FIRST_CLASS = 0x8
-START_TRANSCRIPTION = 0x10
-START_TRANSLATION = 0x20
-CONTINUE_TRANSLATION = 0x40
-APPEND_TRANSLATION = 0x80
-START_EXAMPLE = 0x100
-APPEND_EXAMPLE = 0x200
-APPEND_COMMENT = 0x400
+START_HOMONYM       = 0x1
+START_CLASS         = 0x2
+START_TRANSCRIPTION = 0x4
+START_TRANSLATION   = 0x8
+CONTINUE_TRANSLATION= 0x10
+APPEND_TRANSLATION  = 0x20
+START_EXAMPLE       = 0x40
+APPEND_EXAMPLE      = 0x80
+APPEND_COMMENT      = 0x100
 
 # precompiled regexs
 re_m_tag_with_content = re.compile(r'(\[m\d\])(.*?)(\[/m\])')
@@ -201,11 +199,11 @@ class FlawlessDSLParser(object):
             #todo check for child tags wrapping, maybe use original algorithm (to_close set)
             item_tagged = item
             if item.strip() != '':
-                if len(stack[-1].tags.intersection(set([_layer.tag.Tag('p', 'p')]))):
+                if len(stack[-1].tags.intersection({_layer.tag.Tag('p', 'p')})):
                     item_tagged = '<i data-abbr>' + item + '</i>'
-                elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))):
+                elif len(stack[-1].tags.intersection({_layer.tag.Tag('i', 'i')})):
                     item_tagged = '<i>' + item + '</i>'
-                elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('sup', 'sup')]))):
+                elif len(stack[-1].tags.intersection({_layer.tag.Tag('sup', 'sup')})):
                     item_tagged = '<sup>' + item + '</sup>'
             return item_tagged
 
@@ -282,34 +280,32 @@ class FlawlessDSLParser(object):
                 stack[-1].text += item
 
                 # example starts
-                if stack[0].tags.issuperset(set([_layer.tag.Tag('*' ,'*'),_layer.tag.Tag('ex' ,'ex')])):
+                if stack[0].tags.issuperset({_layer.tag.Tag('*' ,'*'),_layer.tag.Tag('ex' ,'ex')}):
                     line_state |= START_EXAMPLE
                     if len(stack) > 1:
                         line_state |= APPEND_EXAMPLE
                 # translation starts
-                elif len(stack[0].tags.intersection(set([_layer.tag.Tag('m'+str(margin+1), 'm')]))) or \
-                        len(stack[-1].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')]))) or \
-                        (len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))) and
+                elif len(stack[0].tags.intersection({_layer.tag.Tag('m'+str(margin+1), 'm')})) or \
+                        len(stack[-1].tags.intersection({_layer.tag.Tag('m' + str(margin + 1), 'm')})) or \
+                        (len(stack[-1].tags.intersection({_layer.tag.Tag('i', 'i')})) and
                          not len(stack[0].tags) and
-                         len(stack[-2].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')])))):
+                         len(stack[-2].tags.intersection({_layer.tag.Tag('m' + str(margin + 1), 'm')}))):
                     line_state |= START_TRANSLATION
-                    if (not len(stack[-1].tags.intersection(set([_layer.tag.Tag('m' + str(margin + 1), 'm')]))) and \
+                    if (not len(stack[-1].tags.intersection({_layer.tag.Tag('m' + str(margin + 1), 'm')})) and \
                                     len(stack) > 1) or \
                                     stack[-1].text != item:
                         line_state |= APPEND_TRANSLATION
                 # text is bold
-                elif len(stack[-1].tags.intersection(set([_layer.tag.Tag('b', 'b')]))) == 1:
+                elif len(stack[-1].tags.intersection({_layer.tag.Tag('b', 'b')})) == 1:
                     # line starts with bold roman number like 'IV'
                     if len(re.findall(r'^[IV]+', item)):
                         line_state |= START_HOMONYM
                         if item == 'I':
-                            line_state |= FIRST_HOMONYM
                             margin += 1
                     # line starts with arabic number like '1.'
                     elif len(re.findall(r'^\d+\.', item)):
                         line_state |= START_CLASS
                         if item == '1.':
-                            line_state |= FIRST_CLASS
                             margin += 1
                 #assuming first line contains transcription, word category, and sometimes word forms and comments (area)
                 #but check if it's not contains closing sqare bracket ] and it's acutal word category and area, not translation - a I
@@ -317,24 +313,18 @@ class FlawlessDSLParser(object):
                         len(re.findall(r'\\' + BRACKET_R, item)):
                     line_state |= START_TRANSCRIPTION
 
-                if line_state & FIRST_HOMONYM:
-                    line_state ^= FIRST_HOMONYM
-                    article_tree['hom'] = []
-
                 if line_state & START_HOMONYM:
                     line_state ^= START_HOMONYM
+                    if 'hom' not in article_tree:
+                        article_tree['hom'] = []
                     article_tree['hom'].append({})
                     cur_homonym = article_tree['hom'][-1]
                     cur_homonym['numRB'] = re.sub(r'^([IV]+)', r'\1', item)
-                    cur_homonym['def'] = [{}]
-
-                if line_state & FIRST_CLASS:
-                    line_state ^= FIRST_CLASS
-                    cur_homonym['def'] = []
 
                 if line_state & START_CLASS:
                     line_state ^= START_CLASS
-                    #if 'hom' not in article_tree:
+                    if 'def' not in cur_homonym:
+                        cur_homonym['def'] = []
                     cur_homonym['def'].append({})
                     cur_homonym['def'][-1]['numB'] = re.sub(r'(\d+)\.', r'\1', item)
 
@@ -417,7 +407,7 @@ class FlawlessDSLParser(object):
                     #todo do not split comma in special cases (i.e. long sentence) - a 5. 1), a 6.
                     #todo split translation and synonims after comment - a I 8., a I 11. 2), a I 12.
                     #do not split comment block
-                    if stack[-1].tags.issuperset(set([_layer.tag.Tag('i', 'i'),_layer.tag.Tag('com', 'com')])):
+                    if stack[-1].tags.issuperset({_layer.tag.Tag('i', 'i'),_layer.tag.Tag('com', 'com')}):
                         if not len(cur_trn[-1]['tr']):
                             cur_trn[-1]['tr'].append({})
                         cur_trn[-1]['tr'][-1]['text'] = wrap_tags(stack, item)
@@ -470,7 +460,7 @@ class FlawlessDSLParser(object):
 
                 #comment on first line, without transcription
                 elif 'def' not in cur_homonym and \
-                        stack[-1].tags.issuperset(set([_layer.tag.Tag('i', 'i'),_layer.tag.Tag('com', 'com')])):
+                        stack[-1].tags.issuperset({_layer.tag.Tag('i', 'i'),_layer.tag.Tag('com', 'com')}):
                     cur_homonym['def'] = [{}]
                     line_state = append_comment(line_state, cur_homonym['def'][-1], stack, item)
                 #todo parse irregular verb forms
@@ -478,7 +468,7 @@ class FlawlessDSLParser(object):
                 #todo check actual class, not just comment when translation moved to top - 'd word
                 #todo do not extract area if it's within brackets - a word
                 #todo do not extract transcription if it's within brackets, and first transcription already extracted - a word
-                else:
+                elif 'def' in cur_homonym:
                     cur_def = cur_homonym['def'][-1]
                     if 'hom' in cur_def:
                         cur_def = cur_def['hom'][-1]
@@ -487,19 +477,19 @@ class FlawlessDSLParser(object):
                             line_state = append_comment(line_state, cur_def, stack, item)
                         elif 'class' not in cur_def and \
                                 'com' not in cur_def and \
-                                stack[-1].tags.issuperset(set([_layer.p_tag])) and \
+                                stack[-1].tags.issuperset({_layer.p_tag}) and \
                                 item.strip() != '':
                             # word category
                             cur_def['class'] = item
                         elif 'area' not in cur_def and \
                                 'com' not in cur_def and \
-                                stack[-1].tags.issuperset(set([_layer.p_tag])) and \
+                                stack[-1].tags.issuperset({_layer.p_tag}) and \
                                 item.strip() != '':
                             # word area
                             cur_def['area'] = item
                         #todo treat second [p] as comment start (currently ignored) - a II
                         elif 'com' not in cur_def and \
-                                len(stack[-1].tags.intersection(set([_layer.tag.Tag('i', 'i')]))) and \
+                                len(stack[-1].tags.intersection({_layer.tag.Tag('i', 'i')})) and \
                                 item.strip() != '':
                             #comment or maybe link
                             #todo analyze equal character =
