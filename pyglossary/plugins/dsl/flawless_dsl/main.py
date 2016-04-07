@@ -391,17 +391,17 @@ class FlawlessDSLParser(object):
                 elif line_state & CONTINUE_TRANSLATION:
                     greek_dot = re.findall(r'^(\d+)\. ', item)
                     if len(greek_dot):
-                        cur_trn[-1]['num'] = greek_dot[0]
+                        cur_trn[-1]['num'] = int(greek_dot[0])
                         item = re.sub(r'^\d+. ', '', item)
 
                     greek_bracket = re.findall(r'^(\d+)\) ', item)
                     if len(greek_bracket):
                         if len(greek_dot):
-                            cur_trn[-1]['num'] = greek_dot[0]
+                            cur_trn[-1]['num'] = int(greek_dot[0])
                         elif len(cur_trn) > 1 and \
                                 'num' in cur_trn[-2]:
                             cur_trn[-1]['num'] = cur_trn[-2]['num']
-                        cur_trn[-1]['sense'] = greek_bracket[0]
+                        cur_trn[-1]['sense'] = int(greek_bracket[0])
                         item = re.sub(r'^\d+\) ', '', item)
                     #todo also do this in APPEND_TRANSLATION - be II Б 2. 2), but not in comments - be II Б 15. 2), and not in double language defs - be II Б 5. and be II Б 6.
                     #todo do not split comma in special cases (i.e. long sentence) - a 5. 1), a 6.
