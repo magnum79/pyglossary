@@ -326,7 +326,7 @@ class FlawlessDSLParser(object):
                     if 'def' not in cur_homonym:
                         cur_homonym['def'] = []
                     cur_homonym['def'].append({})
-                    cur_homonym['def'][-1]['numB'] = re.sub(r'(\d+)\.', r'\1', item)
+                    cur_homonym['def'][-1]['numB'] = int(re.sub(r'(\d+)\.', r'\1', item))
 
                 if line_state & START_TRANSLATION and not line_state & CONTINUE_TRANSLATION:
                     line_state ^= START_TRANSLATION
