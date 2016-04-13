@@ -69,6 +69,9 @@ TEXT = 3
 BRACKET_L = '\0\1'
 BRACKET_R = '\0\2'
 
+COMMA = '\0\3'
+SEMICOLON = '\0\4'
+
 START_HOMONYM       = 0x1
 START_CLASS         = 0x2
 START_TRANSCRIPTION = 0x4
@@ -125,7 +128,7 @@ class FlawlessDSLParser(object):
         self.tags = frozenset(tags_)
 
 
-    def parse(self, line, article_tree):
+    def parse(self, line, article_tree, **options):
         r"""
         parse dsl markup in `line` and return clean valid dsl markup.
 
@@ -135,13 +138,13 @@ class FlawlessDSLParser(object):
         :rtype: str
         """
         line = self.put_brackets_away(line)
-        line = self._parse(line, article_tree)
+        line = self._parse(line, article_tree, **options)
         return self.bring_brackets_back(line)
 
 
-    def _parse(self, line, article_tree):
+    def _parse(self, line, article_tree, **options):
         items = self._split_line_by_tags(line)
-        line = self._tags_and_text_loop(items, article_tree)
+        line = self._tags_and_text_loop(items, article_tree, **options)
         return line
 
 
@@ -187,7 +190,7 @@ class FlawlessDSLParser(object):
 
 
     @staticmethod
-    def _tags_and_text_loop(tags_and_text, article_tree):
+    def _tags_and_text_loop(tags_and_text, article_tree, **options):
         """
         parse chunks one by one.
 
@@ -203,6 +206,8 @@ class FlawlessDSLParser(object):
                     item_tagged = '<i data-abbr>' + item + '</i>'
                 elif len(stack[-1].tags.intersection({_layer.tag.Tag('i', 'i')})):
                     item_tagged = '<i>' + item + '</i>'
+                elif len(stack[-1].tags.intersection({_layer.tag.Tag('b', 'b')})):
+                    item_tagged = '<b>' + item + '</b>'
                 elif len(stack[-1].tags.intersection({_layer.tag.Tag('sup', 'sup')})):
                     item_tagged = '<sup>' + item + '</sup>'
             return item_tagged
@@ -234,6 +239,10 @@ class FlawlessDSLParser(object):
             margin += 1
 
         line_state = 0
+
+        dictType = 'default'
+        if 'dictType' in options:
+            dictType = options['dictType']
 
         for item_t, item in tags_and_text:
 
@@ -331,6 +340,7 @@ class FlawlessDSLParser(object):
                 if line_state & START_TRANSLATION and not line_state & CONTINUE_TRANSLATION:
                     line_state ^= START_TRANSLATION
                     line_state |= CONTINUE_TRANSLATION
+
                     #translation on the first line
                     if 'def' not in cur_homonym:
                         cur_homonym['def'] = []
@@ -359,8 +369,34 @@ class FlawlessDSLParser(object):
                         if line_state & APPEND_TRANSLATION:
                             line_state ^= APPEND_TRANSLATION
                         line_state |= APPEND_COMMENT
+
                     if line_state & CONTINUE_TRANSLATION:
                         cur_def = cur_homonym['def'][-1]
+                        # phrasal verbs dictionary
+                        if dictType == 'idioms-and-phrasal-verbs':
+                            if len(stack[-1].tags.intersection({_layer.tag.Tag('b', 'b')})):
+                                # remove variants from first line
+                                line_state ^= CONTINUE_TRANSLATION
+                                options['keyAlters'].append([])
+                                options['keyAlters'][-1].append(article_tree['text'])
+                                options['keyAlters'][-1].append(item)
+                                article_tree['text'] = item
+                            if not 'def' in cur_homonym or \
+                                    not 'trn' in cur_def or \
+                                    not len(cur_def['trn'][-1]['tr']):
+                                # when double article title was removed
+                                if line_state & APPEND_TRANSLATION:
+                                    line_state ^= APPEND_TRANSLATION
+                                    if item.strip() == '':
+                                        if line_state & CONTINUE_TRANSLATION:
+                                            line_state ^= CONTINUE_TRANSLATION
+                                # area comment on the first line
+                                if stack[-1].tags.issuperset(
+                                        {_layer.tag.Tag('i', 'i'), _layer.tag.Tag('com', 'com')}):
+                                    if line_state & CONTINUE_TRANSLATION:
+                                        line_state ^= CONTINUE_TRANSLATION
+
+                    if line_state & CONTINUE_TRANSLATION:
                         if 'hom' in cur_def:
                             cur_def = cur_def['hom'][-1]
                         if 'trn' not in cur_def:
@@ -403,25 +439,28 @@ class FlawlessDSLParser(object):
                             cur_trn[-1]['num'] = cur_trn[-2]['num']
                         cur_trn[-1]['sense'] = int(greek_bracket[0])
                         item = re.sub(r'^\d+\) ', '', item)
-                    #todo also do this in APPEND_TRANSLATION - be II Б 2. 2), but not in comments - be II Б 15. 2), and not in double language defs - be II Б 5. and be II Б 6.
+                    #todo also do splitting in APPEND_TRANSLATION - be II Б 2. 2), but not in comments - be II Б 15. 2), and not in double language defs - be II Б 5. and be II Б 6.
                     #todo do not split comma in special cases (i.e. long sentence) - a 5. 1), a 6.
-                    #todo split translation and synonims after comment - a I 8., a I 11. 2), a I 12.
+                    #todo split translation and synonyms after comment - a I 8., a I 11. 2), a I 12.
                     #do not split comment block
                     if stack[-1].tags.issuperset({_layer.tag.Tag('i', 'i'),_layer.tag.Tag('com', 'com')}):
                         if not len(cur_trn[-1]['tr']):
                             cur_trn[-1]['tr'].append({})
                         cur_trn[-1]['tr'][-1]['text'] = wrap_tags(stack, item)
                     else:
+                        #replace comma and semicolon inside brackets
+                        item = re.sub(r'(\([^)]*?)([,])(.*?\))', r'\1'+COMMA+r'\3',
+                               re.sub(r'(\([^)]*?)([;])(.*?\))', r'\1'+SEMICOLON+r'\3', item))
                         for variant in re.split(r'; ', item):
                             synonims = re.split(r', ', variant)
                             cur_trn[-1]['tr'].append({})
-                            cur_trn[-1]['tr'][-1]['text'] = wrap_tags(stack, synonims[0])
+                            cur_trn[-1]['tr'][-1]['text'] = wrap_tags(stack, synonims[0].replace(COMMA, ',').replace(SEMICOLON, ';'))
                             if len(synonims) > 1:
                                 del synonims[0]
                                 cur_trn[-1]['tr'][-1]['syn'] = list()
                                 for synonim in synonims:
                                     cur_trn[-1]['tr'][-1]['syn'].append({})
-                                    cur_trn[-1]['tr'][-1]['syn'][-1]['text'] = wrap_tags(stack, synonim)
+                                    cur_trn[-1]['tr'][-1]['syn'][-1]['text'] = wrap_tags(stack, synonim.replace(COMMA, ',').replace(SEMICOLON, ';'))
 
                 elif line_state & START_TRANSCRIPTION:
                     line_state ^= START_TRANSCRIPTION
@@ -435,7 +474,8 @@ class FlawlessDSLParser(object):
                         cur_trn[-1]['ex'] = list()
                     #todo analyse cyrillic numeration а) б) in example sense translations - be II Б 2. 1)
                     if len(cur_trn[-1]['ex']) and \
-                        'tr' not in cur_trn[-1]['ex'][-1]:
+                        'tr' not in cur_trn[-1]['ex'][-1] and \
+                        dictType != 'idioms-and-phrasal-verbs':
                         line_state |= APPEND_EXAMPLE
                     if not line_state & APPEND_EXAMPLE:
                         cur_trn[-1]['ex'].append({})
@@ -478,7 +518,8 @@ class FlawlessDSLParser(object):
                         elif 'class' not in cur_def and \
                                 'com' not in cur_def and \
                                 stack[-1].tags.issuperset({_layer.p_tag}) and \
-                                item.strip() != '':
+                                item.strip() != '' and \
+                                dictType != 'idioms-and-phrasal-verbs':
                             # word category
                             cur_def['class'] = item
                         elif 'area' not in cur_def and \

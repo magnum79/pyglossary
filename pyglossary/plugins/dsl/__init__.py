@@ -30,8 +30,8 @@ enable = True
 format = 'ABBYYLingvoDSL'
 description = 'ABBYY Lingvo DSL (dsl)'
 extentions = ['.dsl']
-readOptions = ['encoding', 'audio', 'onlyFixMarkUp']
-writeOptions = []
+readOptions = ['encoding', 'audio', 'onlyFixMarkUp', 'dictType', 'keyAlters']
+writeOptions = ['keyAlters']
 
 __all__ = ['read']
 
@@ -112,7 +112,7 @@ re_m = re.compile(r'\[m(\d)\](.*?)\[/m\]')
 # single instance of parser.  it's save as long as this script's not going multithread.
 _parse = flawless_dsl.FlawlessDSLParser().parse
 
-def _clean_tags(line, audio, article_tree):
+def _clean_tags(line, audio, article_tree, **options):
     r"""
     WARNING! shortcuts may apply:
         [m2][*][ex]{}[/ex][/*][/m] => <div class="sec ex" style="margin-left:2em;color:steelblue">{}</div>
@@ -169,7 +169,7 @@ def _clean_tags(line, audio, article_tree):
     # replace ~ with headword
     line = re.sub(r'~', article_tree['text'], line)
 
-    line = _parse(line, article_tree)
+    line = _parse(line, article_tree, **options)
 
         # paragraph, part one: before shortcuts.
     line = line.replace('[m]', '[m1]')
@@ -296,7 +296,7 @@ def read(glos, fname, encoding='utf-8', audio='no', onlyFixMarkUp='no', **option
 
             # convert DSL tags to HTML tags
             # build article tree
-            line = clean_tags(line, audio, article_tree)
+            line = clean_tags(line, audio, article_tree, **options)
             current_text.append(line)
         # title word(s)
         else:
@@ -310,7 +310,7 @@ def read(glos, fname, encoding='utf-8', audio='no', onlyFixMarkUp='no', **option
                     if unfinished_line:
                         # line may be skipped if ill formated
                         current_text.append(clean_tags(unfinished_line, audio))
-                    glos_add_entry(glos, current_key, current_key_alters, current_text, article_tree)
+                    glos_add_entry(glos, current_key, current_key_alters, current_text, article_tree, **options)
                 # start new entry
                 current_key = line
                 current_text = []
@@ -320,17 +320,20 @@ def read(glos, fname, encoding='utf-8', audio='no', onlyFixMarkUp='no', **option
 
                 # start article tree
                 article_tree['text'] = line
-                # article_tree['def'] = []
 
             line_type = 'title'
     fp.close()
     
     # last entry
     if line_type == 'text':
-        glos_add_entry(glos, current_key, current_key_alters, current_text, article_tree)
+        glos_add_entry(glos, current_key, current_key_alters, current_text, article_tree, **options)
 
 
-def glos_add_entry(glos, current_key, current_key_alters, current_text, article_tree):
+def glos_add_entry(glos, current_key, current_key_alters, current_text, article_tree, **options):
+    if glos_entry_is_duplicate(glos, article_tree['text']):
+        return
+    if 'dictType' in options and options['dictType'] == 'idioms-and-phrasal-verbs':
+        current_key = article_tree['text']
     glos.addEntry(
         [current_key] + current_key_alters,
         # '\n'.join(current_text),
@@ -338,3 +341,9 @@ def glos_add_entry(glos, current_key, current_key_alters, current_text, article_
             replace('\\\\\u0000\u0001', '[').
             replace('\\\\\u0000\u0002', ']')
     )
+
+def glos_entry_is_duplicate(glos, current_key):
+    for line in glos._data:
+        if line[0] == current_key:
+            return True
+    return False

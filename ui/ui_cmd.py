@@ -222,6 +222,8 @@ class UI(UIBase):
                 return 1
         g = Glossary(ui=self)
         log.info('Reading file "%s"'%ipath)
+        if 'dictType' in read_options and read_options['dictType'] == 'idioms-and-phrasal-verbs':
+            read_options['keyAlters'] = []
         if not g.read(ipath, format=read_format, **read_options):
             log.error('reading input file was failed!')
             return 1
@@ -238,6 +240,8 @@ class UI(UIBase):
         else:
             log.info('Writing to file "%s"'%opath)
             self.setText('Writing: ')
+            if 'dictType' in read_options and read_options['dictType'] == 'idioms-and-phrasal-verbs':
+                write_options['keyAlters'] = read_options['keyAlters']
             if not g.write(opath, format=write_format, **write_options):
                 log.error('writing output file was failed!')
                 return 1
