@@ -319,6 +319,8 @@ def read(glos, fname, encoding='utf-8', audio='no', onlyFixMarkUp='no', **option
                 article_tree = {}
 
                 # start article tree
+                if '{' in line:
+                    line = line.replace('{', '', 1).replace('}', '', 1)
                 article_tree['text'] = line
 
             line_type = 'title'
@@ -330,10 +332,17 @@ def read(glos, fname, encoding='utf-8', audio='no', onlyFixMarkUp='no', **option
 
 
 def glos_add_entry(glos, current_key, current_key_alters, current_text, article_tree, **options):
-    if glos_entry_is_duplicate(glos, article_tree['text']):
-        return
     if 'dictType' in options and options['dictType'] == 'idioms-and-phrasal-verbs':
+        to_cut = re.findall(r'{(.*)}', current_key)
         current_key = article_tree['text']
+        if len(to_cut) == 1:
+            current_key = re.sub(to_cut[0], '', current_key, 1)
+            if len(options['keyAlters']) and \
+                    options['keyAlters'][-1][1] == article_tree['text']:
+                options['keyAlters'][-1][0] = re.sub(to_cut[0], '', options['keyAlters'][-1][0], 1)
+                options['keyAlters'][-1][1] = current_key
+        if glos_entry_is_duplicate(glos, current_key):
+            return
     glos.addEntry(
         [current_key] + current_key_alters,
         # '\n'.join(current_text),

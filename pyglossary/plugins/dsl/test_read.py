@@ -94,7 +94,7 @@ class TestRead(TestCase):
 
     def test_idiom_an_about_face(self):
         before = 'idioms/an about-face.dsl'
-        after = '''{"text":"{an }about-face","def":[{"trn":[{"tr":[{"text":"поворот на 180° (внезапно изменить планы, мнение и т. д.)"}],"ex":[{"text":"Both papers did an about-face and published a condemnation of his actions."},{"text":"The board did and about-face on acquiring more land."}]}],"area":"Am"}]}'''
+        after = '''{"text":"an about-face","def":[{"trn":[{"tr":[{"text":"поворот на 180° (внезапно изменить планы, мнение и т. д.)"}],"ex":[{"text":"Both papers did an about-face and published a condemnation of his actions."},{"text":"The board did and about-face on acquiring more land."}]}],"area":"Am"}]}'''
         test_idiom(self, before, after)
 
     def test_idiom_act_up(self):
