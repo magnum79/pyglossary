@@ -31,7 +31,7 @@ format = 'ABBYYLingvoDSL'
 description = 'ABBYY Lingvo DSL (dsl)'
 extentions = ['.dsl']
 readOptions = ['encoding', 'audio', 'onlyFixMarkUp', 'dictType', 'keyAlters']
-writeOptions = ['keyAlters']
+writeOptions = ['']
 
 __all__ = ['read']
 
