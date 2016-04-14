@@ -108,14 +108,15 @@ def write(glos, filename, **options):
             try:
                 variant = x[0]
                 base = x[1]
+                if variant == base:
+                    raise ValueError('equal variant and base')
                 variant = variant.replace('\'', '\'\'')
                 base = base.replace('\'', '\'\'')
-            except:
-                log.error('error while encoding variant %s' % x[0])
-            else:
                 cur.execute('SELECT id FROM word WHERE w=\'%s\';' % base)
                 base_w_id = cur.fetchone()[0]
                 cur.execute('UPDATE variants SET base_w_id=%d WHERE v=\'%s\';' % (base_w_id, variant))
+            except:
+                log.error('error while processing variant %s' % x[0])
 
     cur.close()
     con.commit()
